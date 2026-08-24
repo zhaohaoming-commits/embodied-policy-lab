@@ -50,6 +50,8 @@ python -m embodied_policy.run_experiments \
 
 受控消融包括：使用 `pickcube_state_delta_h1.yaml` 训练同一 Transformer 的单步预测版本；以及对已训练的 8-step checkpoint 仅改变部署时的 `replan_interval`，无需重训。后者使用 `embodied_policy.sweep_replan`，并输出每个 interval 的均值与样本标准差。
 
+当前消融结果：1-step 与 8-step Transformer 的成功率接近（91.7% ± 2.3% vs 92.7% ± 3.1%）；但对 8-step 策略，部署时每一步都重新预测效果最佳，`replan_interval=4/8` 会分别降至 73.7% / 58.3%。完整表格见 `docs/experiment_log.md`。
+
 数据来源和预处理过程见 `docs/data_provenance.md`。官方数据及训练输出不会提交到 GitHub。
 
 在支持 Vulkan 渲染的 Linux 机器上录制指定 seed：

@@ -16,7 +16,7 @@
 
 首次本地验证：69K 参数，4,800 个训练样本，50 次 rollout 成功率 100%。
 
-## Gate 1：机器人状态策略（工程闭环完成；规范实验待完成）
+## Gate 1：机器人状态策略（已完成）
 
 - 安装并固定 ManiSkill 版本
 - 跑通 PickCube-v1 环境及演示数据
@@ -26,7 +26,7 @@
 
 当前进展：已完成 PickCube 官方演示下载、CPU 重放和 HDF5 adapter；Linux 服务器已完成 RGB 离屏渲染，并保存 1 条成功和 3 条失败 MP4。固定数据划分和测试集的三训练 seed 主基线为：Action-Chunking Transformer 92.7% ± 3.1%，Single-step MLP 77.3% ± 5.5%。
 
-尚未完成：对 `action_horizon` 与 `replan_interval` 的严格消融。三个独立训练 seed、固定且独立于训练 seed 的评测集、逐步失败 telemetry 均已完成；当前结果可作为该单任务状态基线的主结论，但不能外推为视觉策略或跨任务结论。
+三个独立训练 seed、固定且独立于训练 seed 的评测集、逐步失败 telemetry、`action_horizon` 与 `replan_interval` 消融均已完成。当前结果可作为该单任务状态基线的主结论，但不能外推为视觉策略或跨任务结论。
 
 验收：同一条命令可完成训练和独立评测；随机策略、脚本专家和学习策略指标可对比。
 
