@@ -52,6 +52,8 @@ python -m embodied_policy.run_experiments \
 
 当前消融结果：1-step 与 8-step Transformer 的成功率接近（91.7% ± 2.3% vs 92.7% ± 3.1%）；但对 8-step 策略，部署时每一步都重新预测效果最佳，`replan_interval=4/8` 会分别降至 73.7% / 58.3%。完整表格见 `docs/experiment_log.md`。
 
+视觉流水线已完成 RGB+state 数据重放、训练和闭环评估，但当前小规模端到端视觉 BC 的 RGB-only 与 RGB+proprioception 均未获得可用成功率；完整 state 中的真值任务几何仍是高分来源。该负结果和预训练 ResNet-18 的停止准则见 `docs/experiment_log.md`。
+
 数据来源和预处理过程见 `docs/data_provenance.md`。官方数据及训练输出不会提交到 GitHub。
 
 在支持 Vulkan 渲染的 Linux 机器上录制指定 seed：

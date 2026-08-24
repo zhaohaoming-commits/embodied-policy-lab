@@ -37,6 +37,8 @@
 - 加入 action normalization、temporal ensembling 和重规划周期
 - 记录训练时间、峰值显存、推理延迟和任务成功率
 
+当前状态：RGB+state 重放与训练闭环已实现。完整 state 下三 seed 为 95.3% ± 2.1%，但 RGB-only 与 RGB+proprioception 三 seed 均为 0%；预训练 ResNet-18 的 RGB+proprioception 单 seed 仅为 1%。因此不将 Gate 2 误写为“视觉控制成功”，而将其作为端到端视觉 BC 在小数据条件下失败的受控证据。下一步不再调参，转向 Gate 4 的动作条件预测/失败预警。
+
 验收：在至少三个操作任务上进行公平比较，并能解释主要失败模式。
 
 ## Gate 3：规范实验
