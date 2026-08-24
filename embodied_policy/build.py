@@ -54,6 +54,7 @@ def build_dataset(
             obs_horizon=data["obs_horizon"],
             action_horizon=data["action_horizon"],
             camera_name=data.get("camera_name", "base_camera"),
+            state_indices=data.get("state_indices"),
         )
     if kind != "synthetic_reach":
         raise ValueError(f"Unsupported dataset kind: {kind}")
@@ -83,7 +84,9 @@ def build_model(
         with h5py.File(data["path"], "r") as handle:
             first = handle[sorted_trajectory_names(handle)[0]]
             state_data = first["obs/state"] if kind == "maniskill_rgb_state_hdf5" else first["obs"]
-            obs_dim = int(state_data.shape[-1])
+            raw_obs_dim = int(state_data.shape[-1])
+            state_indices = data.get("state_indices")
+            obs_dim = len(state_indices) if state_indices is not None else raw_obs_dim
             action_dim = int(first["actions"].shape[-1])
             image_channels = (
                 int(first[f"obs/sensor_data/{data.get('camera_name', 'base_camera')}/rgb"].shape[-1])

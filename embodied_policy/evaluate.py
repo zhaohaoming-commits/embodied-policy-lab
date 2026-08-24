@@ -192,6 +192,7 @@ def evaluate_maniskill(
     action_mean = np.asarray(normalization["action_mean"], dtype=np.float32)
     action_std = np.asarray(normalization["action_std"], dtype=np.float32)
     uses_images = data_cfg.get("kind") == "maniskill_rgb_state_hdf5"
+    state_indices = np.asarray(data_cfg.get("state_indices", []), dtype=np.int64)
     image_mean = np.asarray(normalization["image_mean"], dtype=np.float32) if uses_images else None
     image_std = np.asarray(normalization["image_std"], dtype=np.float32) if uses_images else None
 
@@ -225,7 +226,10 @@ def evaluate_maniskill(
                 normalized_image = (image_array - image_mean[:, None, None]) / image_std[:, None, None]
             else:
                 observation_array = observation.detach().cpu().numpy()[0]
-            normalized_observation = (observation_array - obs_mean) / obs_std
+            policy_observation = (
+                observation_array[state_indices] if len(state_indices) else observation_array
+            )
+            normalized_observation = (policy_observation - obs_mean) / obs_std
             history: deque[np.ndarray] = deque(
                 [normalized_observation.copy() for _ in range(data_cfg["obs_horizon"])],
                 maxlen=data_cfg["obs_horizon"],
@@ -271,7 +275,10 @@ def evaluate_maniskill(
                     )
                 else:
                     observation_array = observation.detach().cpu().numpy()[0]
-                history.append((observation_array - obs_mean) / obs_std)
+                policy_observation = (
+                    observation_array[state_indices] if len(state_indices) else observation_array
+                )
+                history.append((policy_observation - obs_mean) / obs_std)
                 success = bool(info["success"].detach().cpu().item())
                 final_is_grasped = bool(info["is_grasped"].detach().cpu().item())
                 final_is_placed = bool(info["is_obj_placed"].detach().cpu().item())

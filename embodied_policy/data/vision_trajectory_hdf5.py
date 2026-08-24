@@ -24,6 +24,7 @@ class VisionStateTrajectoryDataset(Dataset[dict[str, torch.Tensor]]):
         obs_horizon: int,
         action_horizon: int,
         camera_name: str = "base_camera",
+        state_indices: Sequence[int] | None = None,
     ) -> None:
         self.path = str(Path(path))
         self.episode_names = list(episode_names)
@@ -38,7 +39,14 @@ class VisionStateTrajectoryDataset(Dataset[dict[str, torch.Tensor]]):
         with h5py.File(self.path, "r") as handle:
             first = handle[self.episode_names[0]]
             states, images, actions = self._datasets(first)
-            self.obs_dim = int(states.shape[-1])
+            raw_obs_dim = int(states.shape[-1])
+            self.state_indices = np.asarray(
+                list(state_indices) if state_indices is not None else list(range(raw_obs_dim)),
+                dtype=np.int64,
+            )
+            if not len(self.state_indices) or self.state_indices.min() < 0 or self.state_indices.max() >= raw_obs_dim:
+                raise ValueError(f"state_indices must be within [0, {raw_obs_dim})")
+            self.obs_dim = int(len(self.state_indices))
             self.action_dim = int(actions.shape[-1])
             if images.ndim != 4 or images.shape[-1] != 3:
                 raise ValueError("Expected RGB images shaped [time, height, width, 3]")
@@ -88,7 +96,7 @@ class VisionStateTrajectoryDataset(Dataset[dict[str, torch.Tensor]]):
         with h5py.File(self.path, "r") as handle:
             for name in self.episode_names:
                 states, images, actions = self._datasets(handle[name])
-                state_values.append(np.asarray(states[:-1], dtype=np.float32))
+                state_values.append(np.asarray(states[:-1, self.state_indices], dtype=np.float32))
                 action_values.append(np.asarray(actions, dtype=np.float32))
                 rgb = np.asarray(images[:-1], dtype=np.float64) / 255.0
                 image_sum += rgb.sum(axis=(0, 1, 2))
@@ -112,7 +120,7 @@ class VisionStateTrajectoryDataset(Dataset[dict[str, torch.Tensor]]):
         name, timestep = self.index[index]
         states, image_data, action_data = self._datasets(self.handle[name])
         obs_start = max(0, timestep - self.obs_horizon + 1)
-        observations = np.asarray(states[obs_start : timestep + 1], dtype=np.float32)
+        observations = np.asarray(states[obs_start : timestep + 1, self.state_indices], dtype=np.float32)
         images = np.asarray(image_data[obs_start : timestep + 1], dtype=np.float32) / 255.0
         if len(observations) < self.obs_horizon:
             pad_count = self.obs_horizon - len(observations)

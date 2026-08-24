@@ -60,6 +60,22 @@ class ManiSkillTrajectoryDatasetTest(unittest.TestCase):
             self.assertTrue(np.isfinite(normalized["observations"].numpy()).all())
             dataset.close()
 
+    def test_vision_state_can_select_proprioception_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "vision_subset.h5"
+            with h5py.File(path, "w") as handle:
+                episode = handle.create_group("traj_0")
+                obs = episode.create_group("obs")
+                obs.create_dataset("state", data=np.arange(20, dtype=np.float32).reshape(5, 4))
+                camera = obs.create_group("sensor_data").create_group("base_camera")
+                camera.create_dataset("rgb", data=np.zeros((5, 2, 2, 3), dtype=np.uint8))
+                episode.create_dataset("actions", data=np.zeros((4, 2), dtype=np.float32))
+            dataset = VisionStateTrajectoryDataset(path, ["traj_0"], 1, 1, state_indices=[0, 2])
+            sample = dataset[1]
+            self.assertEqual(tuple(sample["observations"].shape), (1, 2))
+            self.assertEqual(sample["observations"][0].tolist(), [4.0, 6.0])
+            dataset.close()
+
 
 if __name__ == "__main__":
     unittest.main()
