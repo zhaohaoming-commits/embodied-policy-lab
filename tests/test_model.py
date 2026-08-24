@@ -80,6 +80,16 @@ class VisionStateActionChunkingTransformerTest(unittest.TestCase):
             second = model(torch.ones(1, 2, 6), images)
         self.assertTrue(torch.equal(first, second))
 
+    def test_resnet18_encoder_without_external_torchvision(self) -> None:
+        model = VisionStateActionChunkingTransformer(
+            image_channels=3, obs_dim=6, action_dim=3, obs_horizon=2, action_horizon=4,
+            d_model=32, nhead=4, num_layers=2, dim_feedforward=64, dropout=0.0,
+            vision_encoder="resnet18",
+        ).eval()
+        with torch.no_grad():
+            output = model(torch.randn(1, 2, 6), torch.randn(1, 2, 3, 64, 64))
+        self.assertEqual(tuple(output.shape), (1, 4, 3))
+
 
 if __name__ == "__main__":
     unittest.main()

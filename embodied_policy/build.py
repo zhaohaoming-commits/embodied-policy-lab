@@ -116,6 +116,9 @@ def build_model(
         return VisionStateActionChunkingTransformer(
             image_channels=image_channels,
             use_state=model.get("use_state", True),
+            vision_encoder=model.get("vision_encoder", "tiny_cnn"),
+            pretrained_weights_path=model.get("pretrained_weights_path"),
+            freeze_image_encoder=model.get("freeze_image_encoder", False),
             obs_dim=obs_dim,
             action_dim=action_dim,
             obs_horizon=data["obs_horizon"],

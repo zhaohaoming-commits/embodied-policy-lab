@@ -14,6 +14,9 @@ from embodied_policy.config import load_config
 from embodied_policy.data import ManiSkillTrajectoryDataset, VisionStateTrajectoryDataset
 from embodied_policy.utils import choose_device, seed_everything
 
+IMAGENET_RGB_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_RGB_STD = [0.229, 0.224, 0.225]
+
 
 def run_epoch(
     model: torch.nn.Module,
@@ -63,6 +66,11 @@ def train(config: dict[str, Any]) -> Path:
     normalization = None
     if isinstance(train_dataset, (ManiSkillTrajectoryDataset, VisionStateTrajectoryDataset)):
         normalization = train_dataset.compute_normalization()
+        if isinstance(train_dataset, VisionStateTrajectoryDataset) and config["data"].get(
+            "image_normalization", "train"
+        ) == "imagenet":
+            normalization["image_mean"] = torch.tensor(IMAGENET_RGB_MEAN).numpy()
+            normalization["image_std"] = torch.tensor(IMAGENET_RGB_STD).numpy()
         train_dataset.set_normalization(normalization)
         if not isinstance(val_dataset, type(train_dataset)):
             raise TypeError("Training and validation dataset types must match")
