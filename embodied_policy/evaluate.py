@@ -87,9 +87,28 @@ def classify_pickcube_failure(
     return "reached_goal_but_not_completed"
 
 
+def extract_rgb_state_observation(
+    observation: Any, camera_name: str
+) -> tuple[np.ndarray, np.ndarray]:
+    """Convert ManiSkill's ``rgb+state`` dictionary to state and CHW RGB arrays."""
+    try:
+        state_value = observation["state"]
+        rgb_value = observation["sensor_data"][camera_name]["rgb"]
+    except (KeyError, TypeError) as error:
+        raise ValueError(f"Expected rgb+state observation with camera '{camera_name}'") from error
+    state = np.asarray(state_value.detach().cpu().numpy() if torch.is_tensor(state_value) else state_value)
+    rgb = np.asarray(rgb_value.detach().cpu().numpy() if torch.is_tensor(rgb_value) else rgb_value)
+    if state.ndim != 2 or rgb.ndim != 4 or rgb.shape[-1] != 3:
+        raise ValueError("Expected batched state [1, D] and RGB [1, H, W, 3]")
+    return state[0].astype(np.float32), np.moveaxis(rgb[0], -1, -3).astype(np.float32) / 255.0
+
+
 @torch.no_grad()
 def evaluate(config: dict[str, Any], checkpoint_path: str | Path) -> dict[str, Any]:
-    if config["data"].get("kind", "synthetic_reach") == "maniskill_hdf5":
+    if config["data"].get("kind", "synthetic_reach") in {
+        "maniskill_hdf5",
+        "maniskill_rgb_state_hdf5",
+    }:
         return evaluate_maniskill(config, checkpoint_path)
     seed_everything(config["seed"])
     device = choose_device()
@@ -166,13 +185,16 @@ def evaluate_maniskill(
     normalization = checkpoint.get("normalization")
     if normalization is None:
         raise ValueError("ManiSkill checkpoint is missing training-set normalization statistics")
+    data_cfg = config["data"]
+    eval_cfg = config["eval"]
     obs_mean = np.asarray(normalization["obs_mean"], dtype=np.float32)
     obs_std = np.asarray(normalization["obs_std"], dtype=np.float32)
     action_mean = np.asarray(normalization["action_mean"], dtype=np.float32)
     action_std = np.asarray(normalization["action_std"], dtype=np.float32)
+    uses_images = data_cfg.get("kind") == "maniskill_rgb_state_hdf5"
+    image_mean = np.asarray(normalization["image_mean"], dtype=np.float32) if uses_images else None
+    image_std = np.asarray(normalization["image_std"], dtype=np.float32) if uses_images else None
 
-    data_cfg = config["data"]
-    eval_cfg = config["eval"]
     env = gym.make(
         data_cfg["env_id"],
         num_envs=1,
@@ -194,11 +216,27 @@ def evaluate_maniskill(
             # changed in the evaluation config.
             episode_seed = evaluation_seed + 30_000 + episode_index
             observation, _ = env.reset(seed=episode_seed)
-            observation_array = observation.detach().cpu().numpy()[0]
+            if uses_images:
+                observation_array, image_array = extract_rgb_state_observation(
+                    observation, data_cfg.get("camera_name", "base_camera")
+                )
+                if image_mean is None or image_std is None:
+                    raise ValueError("RGB+state checkpoint is missing image normalization statistics")
+                normalized_image = (image_array - image_mean[:, None, None]) / image_std[:, None, None]
+            else:
+                observation_array = observation.detach().cpu().numpy()[0]
             normalized_observation = (observation_array - obs_mean) / obs_std
             history: deque[np.ndarray] = deque(
                 [normalized_observation.copy() for _ in range(data_cfg["obs_horizon"])],
                 maxlen=data_cfg["obs_horizon"],
+            )
+            image_history: deque[np.ndarray] | None = (
+                deque(
+                    [normalized_image.copy() for _ in range(data_cfg["obs_horizon"])],
+                    maxlen=data_cfg["obs_horizon"],
+                )
+                if uses_images
+                else None
             )
             action_queue: deque[np.ndarray] = deque()
             episode_succeeded = False
@@ -212,13 +250,27 @@ def evaluate_maniskill(
             for step in range(1, eval_cfg["max_steps"] + 1):
                 if not action_queue or (step - 1) % eval_cfg["replan_interval"] == 0:
                     observations = torch.from_numpy(np.stack(history)).unsqueeze(0).to(device)
-                    normalized_action_chunk = model(observations).squeeze(0).cpu().numpy()
+                    if image_history is None:
+                        normalized_action_chunk = model(observations).squeeze(0).cpu().numpy()
+                    else:
+                        images = torch.from_numpy(np.stack(image_history)).unsqueeze(0).to(device)
+                        normalized_action_chunk = model(observations, images).squeeze(0).cpu().numpy()
                     action_chunk = normalized_action_chunk * action_std + action_mean
                     action_queue = deque(action_chunk[: eval_cfg["replan_interval"]])
                 action = action_queue.popleft()
                 action = np.clip(action, env.action_space.low, env.action_space.high)[None, :]
                 observation, _, terminated, truncated, info = env.step(action)
-                observation_array = observation.detach().cpu().numpy()[0]
+                if uses_images:
+                    observation_array, image_array = extract_rgb_state_observation(
+                        observation, data_cfg.get("camera_name", "base_camera")
+                    )
+                    if image_mean is None or image_std is None:
+                        raise AssertionError("RGB normalization must be available")
+                    image_history.append(
+                        (image_array - image_mean[:, None, None]) / image_std[:, None, None]
+                    )
+                else:
+                    observation_array = observation.detach().cpu().numpy()[0]
                 history.append((observation_array - obs_mean) / obs_std)
                 success = bool(info["success"].detach().cpu().item())
                 final_is_grasped = bool(info["is_grasped"].detach().cpu().item())

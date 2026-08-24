@@ -5,7 +5,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from embodied_policy.data import ManiSkillTrajectoryDataset
+from embodied_policy.data import ManiSkillTrajectoryDataset, VisionStateTrajectoryDataset
 
 
 class ManiSkillTrajectoryDatasetTest(unittest.TestCase):
@@ -32,6 +32,32 @@ class ManiSkillTrajectoryDatasetTest(unittest.TestCase):
             normalized = dataset[0]
             self.assertTrue(np.isfinite(normalized["observations"].numpy()).all())
             self.assertTrue(np.isfinite(normalized["actions"].numpy()).all())
+            dataset.close()
+
+    def test_vision_state_alignment_and_normalization(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "vision_trajectory.h5"
+            with h5py.File(path, "w") as handle:
+                episode = handle.create_group("traj_0")
+                observation = episode.create_group("obs")
+                observation.create_dataset("state", data=np.arange(20, dtype=np.float32).reshape(5, 4))
+                sensor_data = observation.create_group("sensor_data").create_group("base_camera")
+                rgb = np.zeros((5, 4, 6, 3), dtype=np.uint8)
+                rgb[:, :, :, 0] = 255
+                sensor_data.create_dataset("rgb", data=rgb)
+                episode.create_dataset("actions", data=np.arange(8, dtype=np.float32).reshape(4, 2))
+            dataset = VisionStateTrajectoryDataset(path, ["traj_0"], 2, 3)
+            first = dataset[0]
+            last = dataset[3]
+            self.assertEqual(tuple(first["images"].shape), (2, 3, 4, 6))
+            self.assertTrue(first["images"][0].equal(first["images"][1]))
+            self.assertEqual(last["action_mask"].tolist(), [True, False, False])
+            stats = dataset.compute_normalization()
+            self.assertTrue(np.allclose(stats["image_mean"], [1.0, 0.0, 0.0]))
+            dataset.set_normalization(stats)
+            normalized = dataset[0]
+            self.assertTrue(np.isfinite(normalized["images"].numpy()).all())
+            self.assertTrue(np.isfinite(normalized["observations"].numpy()).all())
             dataset.close()
 
 

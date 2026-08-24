@@ -1,10 +1,12 @@
 import unittest
 
 import numpy as np
+import torch
 
 from embodied_policy.evaluate import (
     build_pickcube_step_telemetry,
     classify_pickcube_failure,
+    extract_rgb_state_observation,
     summarize_pickcube_telemetry,
 )
 
@@ -69,6 +71,16 @@ class PickCubeTelemetryTest(unittest.TestCase):
             ),
             "holding_but_never_placed",
         )
+
+    def test_extracts_batched_rgb_state_observation(self) -> None:
+        observation = {
+            "state": torch.arange(42, dtype=torch.float32).reshape(1, 42),
+            "sensor_data": {"base_camera": {"rgb": torch.full((1, 4, 6, 3), 255, dtype=torch.uint8)}},
+        }
+        state, image = extract_rgb_state_observation(observation, "base_camera")
+        self.assertEqual(tuple(state.shape), (42,))
+        self.assertEqual(tuple(image.shape), (3, 4, 6))
+        self.assertEqual(float(image.max()), 1.0)
 
 
 if __name__ == "__main__":

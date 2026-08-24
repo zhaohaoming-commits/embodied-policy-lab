@@ -7,7 +7,6 @@ __pycache__/
 .conda/
 .codex-remote-attachments/
 outputs/
-data/
+/data/
 wandb/
 *.egg-info/
-

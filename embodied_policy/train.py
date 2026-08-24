@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from embodied_policy.build import build_dataset, build_model
 from embodied_policy.config import load_config
-from embodied_policy.data import ManiSkillTrajectoryDataset
+from embodied_policy.data import ManiSkillTrajectoryDataset, VisionStateTrajectoryDataset
 from embodied_policy.utils import choose_device, seed_everything
 
 
@@ -36,7 +36,10 @@ def run_epoch(
             optimizer.zero_grad(set_to_none=True)
         with torch.set_grad_enabled(training):
             with torch.autocast(device_type=device.type, enabled=autocast_enabled):
-                predictions = model(observations)
+                if "images" in batch:
+                    predictions = model(observations, batch["images"].to(device))
+                else:
+                    predictions = model(observations)
                 loss = model.masked_loss(predictions, actions, action_mask)
             if training:
                 loss.backward()
@@ -58,10 +61,10 @@ def train(config: dict[str, Any]) -> Path:
     train_dataset = build_dataset(config, "train")
     val_dataset = build_dataset(config, "val")
     normalization = None
-    if isinstance(train_dataset, ManiSkillTrajectoryDataset):
+    if isinstance(train_dataset, (ManiSkillTrajectoryDataset, VisionStateTrajectoryDataset)):
         normalization = train_dataset.compute_normalization()
         train_dataset.set_normalization(normalization)
-        if not isinstance(val_dataset, ManiSkillTrajectoryDataset):
+        if not isinstance(val_dataset, type(train_dataset)):
             raise TypeError("Training and validation dataset types must match")
         val_dataset.set_normalization(normalization)
     train_cfg = config["train"]

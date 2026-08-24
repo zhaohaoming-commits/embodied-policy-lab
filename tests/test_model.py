@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from embodied_policy.models import ActionChunkingTransformer
+from embodied_policy.models import ActionChunkingTransformer, VisionStateActionChunkingTransformer
 
 
 class ActionChunkingTransformerTest(unittest.TestCase):
@@ -37,6 +37,29 @@ class ActionChunkingTransformerTest(unittest.TestCase):
         self.assertAlmostEqual(loss.item(), 0.5, places=6)
 
 
+class VisionStateActionChunkingTransformerTest(unittest.TestCase):
+    def test_forward_and_backward(self) -> None:
+        model = VisionStateActionChunkingTransformer(
+            image_channels=3,
+            obs_dim=6,
+            action_dim=3,
+            obs_horizon=2,
+            action_horizon=4,
+            d_model=32,
+            nhead=4,
+            num_layers=2,
+            dim_feedforward=64,
+            dropout=0.0,
+        )
+        observations = torch.randn(2, 2, 6)
+        images = torch.randn(2, 2, 3, 32, 32)
+        targets = torch.randn(2, 4, 3)
+        mask = torch.ones(2, 4, dtype=torch.bool)
+        predictions = model(observations, images)
+        self.assertEqual(tuple(predictions.shape), (2, 4, 3))
+        model.masked_loss(predictions, targets, mask).backward()
+        self.assertTrue(any(parameter.grad is not None for parameter in model.parameters()))
+
+
 if __name__ == "__main__":
     unittest.main()
-
