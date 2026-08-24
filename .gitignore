@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+.conda/
+.codex-remote-attachments/
+outputs/
+data/
+wandb/
+*.egg-info/
+

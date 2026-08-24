@@ -1,0 +1,33 @@
+seed: 7
+output_dir: outputs/pickcube_state_mlp
+
+data:
+  kind: maniskill_hdf5
+  path: data/maniskill/demos/PickCube-v1/rl/trajectory.state.pd_joint_delta_pos.physx_cpu.h5
+  env_id: PickCube-v1
+  obs_mode: state
+  control_mode: pd_joint_delta_pos
+  sim_backend: physx_cpu
+  train_episodes: 160
+  val_episodes: 39
+  obs_horizon: 2
+  action_horizon: 1
+
+model:
+  type: single_step_mlp
+  hidden_dims: [256, 256, 256]
+  dropout: 0.1
+
+train:
+  epochs: 20
+  batch_size: 128
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  num_workers: 0
+  amp: true
+
+eval:
+  episodes: 100
+  max_steps: 50
+  replan_interval: 1
+

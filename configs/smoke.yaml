@@ -1,0 +1,35 @@
+seed: 7
+output_dir: outputs/smoke
+
+data:
+  kind: synthetic_reach
+  train_episodes: 160
+  val_episodes: 40
+  episode_length: 30
+  obs_horizon: 2
+  action_horizon: 8
+  dt: 0.10
+  expert_gain: 2.0
+  action_limit: 1.0
+
+model:
+  type: action_chunking_transformer
+  d_model: 64
+  nhead: 4
+  num_layers: 2
+  dim_feedforward: 128
+  dropout: 0.0
+
+train:
+  epochs: 8
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  num_workers: 0
+  amp: true
+
+eval:
+  episodes: 50
+  max_steps: 45
+  success_threshold: 0.08
+  replan_interval: 1
