@@ -15,6 +15,78 @@ from embodied_policy.config import load_config
 from embodied_policy.utils import choose_device, seed_everything
 
 
+def build_pickcube_step_telemetry(
+    observation: np.ndarray,
+    action: np.ndarray,
+    *,
+    step: int,
+    is_grasped: bool,
+    is_obj_placed: bool,
+    is_robot_static: bool,
+    success: bool,
+) -> dict[str, Any]:
+    """Extract human-readable PickCube diagnostics from one post-step state.
+
+    The fixed indices follow ManiSkill's state observation layout documented in
+    ``docs/learning_guide.md``. Keeping this conversion separate from the
+    simulator loop makes the saved JSON easy to inspect and unit test.
+    """
+    observation = np.asarray(observation, dtype=np.float32).reshape(-1)
+    action = np.asarray(action, dtype=np.float32).reshape(-1)
+    if observation.size != 42:
+        raise ValueError(f"Expected a 42-D PickCube state observation, got {observation.size}")
+    if action.size != 8:
+        raise ValueError(f"Expected an 8-D PickCube action, got {action.size}")
+
+    goal_position = observation[26:29]
+    object_position = observation[29:32]
+    return {
+        "step": step,
+        "object_goal_distance": float(np.linalg.norm(goal_position - object_position)),
+        "object_height": float(object_position[2]),
+        "goal_height": float(goal_position[2]),
+        "object_goal_height_error": float(object_position[2] - goal_position[2]),
+        "gripper_command": float(action[-1]),
+        "arm_delta_l2": float(np.linalg.norm(action[:-1])),
+        "is_grasped": is_grasped,
+        "is_obj_placed": is_obj_placed,
+        "is_robot_static": is_robot_static,
+        "success": success,
+    }
+
+
+def summarize_pickcube_telemetry(steps: list[dict[str, Any]]) -> dict[str, Any]:
+    """Create concise episode-level values from the step-by-step telemetry."""
+    if not steps:
+        return {}
+    final = steps[-1]
+    return {
+        "min_object_goal_distance": min(item["object_goal_distance"] for item in steps),
+        "final_object_goal_distance": final["object_goal_distance"],
+        "final_object_height": final["object_height"],
+        "final_goal_height": final["goal_height"],
+        "final_object_goal_height_error": final["object_goal_height_error"],
+        "final_gripper_command": final["gripper_command"],
+        "final_arm_delta_l2": final["arm_delta_l2"],
+        "final_is_grasped": final["is_grasped"],
+        "final_is_obj_placed": final["is_obj_placed"],
+        "final_is_robot_static": final["is_robot_static"],
+    }
+
+
+def classify_pickcube_failure(
+    *, ever_grasped: bool, ever_placed: bool, final_is_grasped: bool
+) -> str:
+    """Give failures a mutually exclusive category from rollout state flags."""
+    if not ever_grasped:
+        return "never_grasped"
+    if not final_is_grasped:
+        return "lost_grasp_before_completion"
+    if not ever_placed:
+        return "holding_but_never_placed"
+    return "reached_goal_but_not_completed"
+
+
 @torch.no_grad()
 def evaluate(config: dict[str, Any], checkpoint_path: str | Path) -> dict[str, Any]:
     if config["data"].get("kind", "synthetic_reach") == "maniskill_hdf5":
@@ -113,6 +185,7 @@ def evaluate_maniskill(
     completed_steps: list[int] = []
     failed_seeds: list[int] = []
     failure_details: list[dict[str, Any]] = []
+    telemetry_episodes: list[dict[str, Any]] = []
 
     try:
         for episode_index in range(eval_cfg["episodes"]):
@@ -131,6 +204,7 @@ def evaluate_maniskill(
             final_is_grasped = False
             final_is_placed = False
             final_is_static = False
+            step_telemetry: list[dict[str, Any]] = []
 
             for step in range(1, eval_cfg["max_steps"] + 1):
                 if not action_queue or (step - 1) % eval_cfg["replan_interval"] == 0:
@@ -149,6 +223,17 @@ def evaluate_maniskill(
                 final_is_static = bool(info["is_robot_static"].detach().cpu().item())
                 ever_grasped = ever_grasped or final_is_grasped
                 ever_placed = ever_placed or final_is_placed
+                step_telemetry.append(
+                    build_pickcube_step_telemetry(
+                        observation_array,
+                        action[0],
+                        step=step,
+                        is_grasped=final_is_grasped,
+                        is_obj_placed=final_is_placed,
+                        is_robot_static=final_is_static,
+                        success=success,
+                    )
+                )
                 if success:
                     successes += 1
                     episode_succeeded = True
@@ -156,14 +241,14 @@ def evaluate_maniskill(
                 if bool(terminated.detach().cpu().item()) or bool(truncated.detach().cpu().item()):
                     break
             completed_steps.append(step)
+            summary = summarize_pickcube_telemetry(step_telemetry)
             if not episode_succeeded:
                 failed_seeds.append(episode_seed)
-                if not ever_grasped:
-                    category = "never_grasped"
-                elif not ever_placed:
-                    category = "grasped_but_never_placed"
-                else:
-                    category = "reached_goal_but_not_completed"
+                category = classify_pickcube_failure(
+                    ever_grasped=ever_grasped,
+                    ever_placed=ever_placed,
+                    final_is_grasped=final_is_grasped,
+                )
                 failure_details.append(
                     {
                         "seed": episode_seed,
@@ -176,6 +261,15 @@ def evaluate_maniskill(
                         "final_is_static": final_is_static,
                     }
                 )
+            telemetry_episodes.append(
+                {
+                    "seed": episode_seed,
+                    "success": episode_succeeded,
+                    "steps": step,
+                    "summary": summary,
+                    "telemetry": step_telemetry,
+                }
+            )
     finally:
         env.close()
 
@@ -191,6 +285,18 @@ def evaluate_maniskill(
     output_path = Path(config["output_dir"]) / "eval_metrics.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    telemetry_path = output_path.parent / "rollout_telemetry.json"
+    telemetry = {
+        "schema_version": 1,
+        "env_id": data_cfg["env_id"],
+        "observation_layout": {
+            "goal_position": [26, 29],
+            "object_position": [29, 32],
+            "action_gripper_command": 7,
+        },
+        "episodes": telemetry_episodes,
+    }
+    telemetry_path.write_text(json.dumps(telemetry, indent=2), encoding="utf-8")
     print(
         f"episodes={eval_cfg['episodes']} success_rate={metrics['success_rate']:.3f} "
         f"mean_steps={metrics['mean_steps']:.2f}"
@@ -198,6 +304,7 @@ def evaluate_maniskill(
     print(f"failed_seeds={failed_seeds}")
     print(f"failure_counts={dict(failure_counts)}")
     print(f"metrics={output_path}")
+    print(f"telemetry={telemetry_path}")
     return metrics
 
 
