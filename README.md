@@ -35,7 +35,7 @@
 
 归一化后的 Action-Chunking Transformer 在 100 次闭环评测中成功率为 90%，Linux 4090 服务器复现为 90%。失败 seed 和汇总指标保存在 `outputs/pickcube_state_delta/eval_metrics.json`。这是单训练 seed 基线，不是最终主结果。
 
-在相同数据划分、归一化和评测 seeds 下，Single-step MLP 为 75%，Action-Chunking Transformer 为 90%。详细实验条件与限制见 `docs/experiment_log.md`。
+固定训练/验证划分和 100 个测试 episode 后的三训练 seed 结果：Action-Chunking Transformer 为 **92.7% ± 3.1%**，Single-step MLP 为 **77.3% ± 5.5%**。这是当前主基线；详细实验条件、逐 seed 数据与限制见 `docs/experiment_log.md`。
 
 三训练 seed 的正式比较使用批量入口。`split_seed` 与 `eval.seed` 已固定为 7；因此改变 `--train-seeds` 只会改变模型初始化与 DataLoader 顺序，两个模型也会共享数据划分和 100 个测试 episode：
 
