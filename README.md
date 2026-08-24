@@ -9,9 +9,9 @@
 - [x] 从零实现 Transformer action chunk policy
 - [x] masked action loss、训练、验证及 checkpoint
 - [x] 闭环 rollout 成功率评测
-- [ ] 接入 ManiSkill 演示数据
+- [x] 接入 ManiSkill PickCube 官方演示数据
 - [ ] 图像编码器与本体状态融合
-- [ ] BC 与 action chunking 基线对比
+- [x] Single-step BC 与 action chunking 状态基线对比
 - [ ] 多随机种子及消融实验
 
 ## 本地运行
@@ -33,7 +33,7 @@
 .\.venv\Scripts\python.exe -m embodied_policy.evaluate --config configs/pickcube_state_delta.yaml --checkpoint outputs/pickcube_state_delta/best.pt
 ```
 
-100 次闭环评测成功率为 90%，失败 seed 和汇总指标保存在 `outputs/pickcube_state_delta/eval_metrics.json`。这是单 seed 基线，不是最终主结果。
+归一化后的 Action-Chunking Transformer 在 100 次闭环评测中成功率为 90%，Linux 4090 服务器复现为 90%。失败 seed 和汇总指标保存在 `outputs/pickcube_state_delta/eval_metrics.json`。这是单训练 seed 基线，不是最终主结果。
 
 在相同数据划分、归一化和评测 seeds 下，Single-step MLP 为 75%，Action-Chunking Transformer 为 90%。详细实验条件与限制见 `docs/experiment_log.md`。
 
