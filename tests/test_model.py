@@ -60,6 +60,26 @@ class VisionStateActionChunkingTransformerTest(unittest.TestCase):
         model.masked_loss(predictions, targets, mask).backward()
         self.assertTrue(any(parameter.grad is not None for parameter in model.parameters()))
 
+    def test_rgb_only_mode_ignores_state_values(self) -> None:
+        model = VisionStateActionChunkingTransformer(
+            image_channels=3,
+            use_state=False,
+            obs_dim=6,
+            action_dim=3,
+            obs_horizon=2,
+            action_horizon=4,
+            d_model=32,
+            nhead=4,
+            num_layers=2,
+            dim_feedforward=64,
+            dropout=0.0,
+        ).eval()
+        images = torch.randn(1, 2, 3, 32, 32)
+        with torch.no_grad():
+            first = model(torch.zeros(1, 2, 6), images)
+            second = model(torch.ones(1, 2, 6), images)
+        self.assertTrue(torch.equal(first, second))
+
 
 if __name__ == "__main__":
     unittest.main()

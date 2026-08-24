@@ -1,0 +1,39 @@
+seed: 7
+output_dir: outputs/pickcube_rgb_only_delta
+
+data:
+  kind: maniskill_rgb_state_hdf5
+  path: data/maniskill/demos/PickCube-v1/rl/trajectory.rgb+state.pd_joint_delta_pos.physx_cpu.h5
+  env_id: PickCube-v1
+  obs_mode: rgb+state
+  camera_name: base_camera
+  control_mode: pd_joint_delta_pos
+  sim_backend: physx_cpu
+  split_seed: 7
+  train_episodes: 160
+  val_episodes: 39
+  obs_horizon: 2
+  action_horizon: 8
+
+model:
+  type: vision_state_action_chunking_transformer
+  use_state: false
+  d_model: 128
+  nhead: 8
+  num_layers: 3
+  dim_feedforward: 512
+  dropout: 0.1
+
+train:
+  epochs: 20
+  batch_size: 64
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  num_workers: 0
+  amp: true
+
+eval:
+  seed: 7
+  episodes: 100
+  max_steps: 50
+  replan_interval: 1

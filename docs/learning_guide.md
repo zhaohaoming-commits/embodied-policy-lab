@@ -89,6 +89,8 @@ normalized_x = (x - train_mean) / train_std
 - `action_horizon=1`：Transformer 仍读取相同的两帧状态、使用相同的网络宽度和训练数据，但只学习当前一步动作。与当前 `action_horizon=8` 对比，主要检验未来动作块监督是否有帮助。
 - `replan_interval=1/2/4/8`：不再训练新模型；都使用同一批 8-step checkpoint。它改变的是部署时每次预测后连续执行几个动作才重新观察和预测。`1` 最保守、反馈最频繁；`8` 最开放环、推理调用最少但会更容易累积误差。
 
+视觉阶段还会比较 RGB+state 与 RGB-only。RGB+state 的高分不能自动证明模型使用了图像，因为 42 维 state 已经包含物体与目标的精确三维位置。RGB-only 配置会将 state token 置为全零，单元测试也验证改变 state 数值不会改变其输出；它才是“仅凭像素控制”的必要对照。
+
 ## 8. 当前必须能回答的问题
 
 1. 为什么 `obs` 比 `actions` 多一个时间步？

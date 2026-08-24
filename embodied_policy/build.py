@@ -112,6 +112,7 @@ def build_model(
             raise AssertionError("RGB data must define image channels")
         return VisionStateActionChunkingTransformer(
             image_channels=image_channels,
+            use_state=model.get("use_state", True),
             obs_dim=obs_dim,
             action_dim=action_dim,
             obs_horizon=data["obs_horizon"],

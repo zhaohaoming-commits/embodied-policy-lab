@@ -11,8 +11,11 @@ class VisionStateActionChunkingTransformer(ActionChunkingTransformer):
 
     requires_images = True
 
-    def __init__(self, image_channels: int, *args: object, **kwargs: object) -> None:
+    def __init__(
+        self, image_channels: int, *args: object, use_state: bool = True, **kwargs: object
+    ) -> None:
         super().__init__(*args, **kwargs)
+        self.use_state = use_state
         d_model = self.obs_projection[0].out_features
         self.image_encoder = nn.Sequential(
             nn.Conv2d(image_channels, 32, kernel_size=5, stride=2, padding=2),
@@ -35,7 +38,7 @@ class VisionStateActionChunkingTransformer(ActionChunkingTransformer):
         batch_size, horizon, channels, height, width = images.shape
         image_tokens = self.image_encoder(images.reshape(batch_size * horizon, channels, height, width))
         image_tokens = image_tokens.reshape(batch_size, horizon, -1)
-        state_tokens = self.obs_projection(observations)
+        state_tokens = self.obs_projection(observations) if self.use_state else torch.zeros_like(image_tokens)
         query_tokens = self.action_queries.unsqueeze(0).expand(batch_size, -1, -1)
         tokens = torch.cat([state_tokens + image_tokens, query_tokens], dim=1)
         encoded = self.transformer(tokens + self.position_embedding.unsqueeze(0))
