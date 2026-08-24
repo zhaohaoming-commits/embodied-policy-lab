@@ -18,7 +18,11 @@ def build_dataset(
     if kind == "maniskill_hdf5":
         with h5py.File(data["path"], "r") as handle:
             episode_names = sorted_trajectory_names(handle)
-        rng = np.random.default_rng(config["seed"])
+        # Keep the episode split fixed while varying the training seed.  This
+        # lets a seed sweep measure optimization/model variance instead of
+        # silently changing the training data for every run.
+        split_seed = data.get("split_seed", config["seed"])
+        rng = np.random.default_rng(split_seed)
         rng.shuffle(episode_names)
         train_count = data["train_episodes"]
         val_count = data["val_episodes"]

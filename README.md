@@ -37,6 +37,17 @@
 
 在相同数据划分、归一化和评测 seeds 下，Single-step MLP 为 75%，Action-Chunking Transformer 为 90%。详细实验条件与限制见 `docs/experiment_log.md`。
 
+三训练 seed 的正式比较使用批量入口。`split_seed` 与 `eval.seed` 已固定为 7；因此改变 `--train-seeds` 只会改变模型初始化与 DataLoader 顺序，两个模型也会共享数据划分和 100 个测试 episode：
+
+```bash
+python -m embodied_policy.run_experiments \
+  --configs configs/pickcube_state_delta.yaml configs/pickcube_state_mlp.yaml \
+  --train-seeds 7 17 27 \
+  --output-root outputs/pickcube_seed_sweep_20260824
+```
+
+运行按顺序执行，避免在共享服务器上抢占多张 GPU。输出根目录会保存每次运行的冻结 `config.yaml`、checkpoint、评测 metrics 和汇总的 `run_summary.{json,csv}`、`aggregate_summary.csv`。
+
 数据来源和预处理过程见 `docs/data_provenance.md`。官方数据及训练输出不会提交到 GitHub。
 
 在支持 Vulkan 渲染的 Linux 机器上录制指定 seed：

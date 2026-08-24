@@ -8,6 +8,7 @@ data:
   obs_mode: state
   control_mode: pd_joint_delta_pos
   sim_backend: physx_cpu
+  split_seed: 7
   train_episodes: 160
   val_episodes: 39
   obs_horizon: 2
@@ -30,6 +31,7 @@ train:
   amp: true
 
 eval:
+  seed: 7
   episodes: 100
   max_steps: 50
   replan_interval: 1

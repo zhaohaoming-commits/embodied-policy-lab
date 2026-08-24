@@ -74,7 +74,17 @@ normalized_x = (x - train_mean) / train_std
 
 比较结果能回答：Action Chunking Transformer 是否真的优于普通单步行为克隆？如果 MLP 同样优秀，我们就不能把成功归功于 Transformer。
 
-## 6. 当前必须能回答的问题
+## 6. 多随机种子时，哪些随机性该固定
+
+“跑三个 seed”不能让每次实验同时换模型初始化、训练数据划分和测试任务，否则成功率波动的来源无法分辨。当前配置拆成三个角色：
+
+- `seed`：模型初始化、DataLoader 打乱顺序等训练随机性；
+- `data.split_seed`：按完整 episode 划分训练/验证集，正式比较中固定为 7；
+- `eval.seed`：100 个测试 episode 的起点，正式比较中固定为 7。
+
+因此 Transformer seed 7/17/27 和 MLP seed 7/17/27 都在同一数据划分、同一批测试任务上比赛。最终报告均值和样本标准差，而不是挑最高的一次。
+
+## 7. 当前必须能回答的问题
 
 1. 为什么 `obs` 比 `actions` 多一个时间步？
 2. 为什么训练/验证要按 episode 划分？
@@ -82,7 +92,7 @@ normalized_x = (x - train_mean) / train_std
 4. 为什么验证 loss 很低仍可能闭环失败？
 5. 为什么归一化统计量只能来自训练集？
 
-## 7. 仿真如何判定成功与失败
+## 8. 仿真如何判定成功与失败
 
 PickCube 最多运行50步。ManiSkill 在每一步返回：
 
@@ -93,6 +103,6 @@ PickCube 最多运行50步。ManiSkill 在每一步返回：
 
 若50步内从未出现 `success=True`，该 rollout 记为失败。评估器还会输出 `rollout_telemetry.json`：每步包含物体—目标距离、物体/目标高度、夹爪命令、机械臂动作幅度及三个环境标志。我们据此将失败初分为：从未抓住、途中掉落（曾抓住但最终未抓住）、始终夹持却未进入放置条件、到过目标但未稳定完成。视频用于验证和细化这些自动标签。
 
-## 8. 当前可视化状态
+## 9. 当前可视化状态
 
 物理仿真和数值评测已在本地 ManiSkill/SAPIEN 中真实运行。此前为了加快100次评测使用 `render_mode=None`，没有生成视频。本地 Windows 的 `rgb_array` 测试在 SAPIEN `render_camera.get_picture` 中发生原生 access violation；视频录制工具已经实现，将在 Linux 服务器执行。这个渲染问题不能被描述成策略或物理仿真失败。

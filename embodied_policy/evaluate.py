@@ -186,10 +186,13 @@ def evaluate_maniskill(
     failed_seeds: list[int] = []
     failure_details: list[dict[str, Any]] = []
     telemetry_episodes: list[dict[str, Any]] = []
+    evaluation_seed = eval_cfg.get("seed", config["seed"])
 
     try:
         for episode_index in range(eval_cfg["episodes"]):
-            episode_seed = config["seed"] + 30_000 + episode_index
+            # Test episodes stay fixed across training seeds unless explicitly
+            # changed in the evaluation config.
+            episode_seed = evaluation_seed + 30_000 + episode_index
             observation, _ = env.reset(seed=episode_seed)
             observation_array = observation.detach().cpu().numpy()[0]
             normalized_observation = (observation_array - obs_mean) / obs_std
@@ -275,6 +278,9 @@ def evaluate_maniskill(
 
     failure_counts = Counter(detail["category"] for detail in failure_details)
     metrics = {
+        "train_seed": config["seed"],
+        "data_split_seed": data_cfg.get("split_seed", config["seed"]),
+        "evaluation_seed": evaluation_seed,
         "episodes": eval_cfg["episodes"],
         "success_rate": successes / eval_cfg["episodes"],
         "mean_steps": float(np.mean(completed_steps)),
