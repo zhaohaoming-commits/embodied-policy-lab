@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 
 from embodied_policy.run_experiments import aggregate_results, prepare_run_config
+from embodied_policy.sweep_replan import aggregate_by_replan_interval
 
 
 class SeedSweepTest(unittest.TestCase):
@@ -35,3 +36,16 @@ class SeedSweepTest(unittest.TestCase):
         self.assertAlmostEqual(rows[0]["success_rate_std"], 0.141421356, places=7)
         self.assertAlmostEqual(rows[0]["mean_steps_mean"], 25.0)
         self.assertAlmostEqual(rows[0]["mean_steps_std"], 7.071067812, places=7)
+
+    def test_replan_aggregate_groups_by_interval(self) -> None:
+        rows = aggregate_by_replan_interval(
+            [
+                {"replan_interval": 2, "success_rate": 0.7, "mean_steps": 30.0},
+                {"replan_interval": 1, "success_rate": 0.9, "mean_steps": 20.0},
+                {"replan_interval": 2, "success_rate": 0.9, "mean_steps": 25.0},
+            ]
+        )
+        self.assertEqual([row["replan_interval"] for row in rows], [1, 2])
+        self.assertEqual(rows[0]["runs"], 1)
+        self.assertAlmostEqual(rows[1]["success_rate_mean"], 0.8)
+        self.assertAlmostEqual(rows[1]["success_rate_std"], 0.141421356, places=7)

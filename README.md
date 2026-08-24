@@ -48,6 +48,8 @@ python -m embodied_policy.run_experiments \
 
 运行按顺序执行，避免在共享服务器上抢占多张 GPU。输出根目录会保存每次运行的冻结 `config.yaml`、checkpoint、评测 metrics 和汇总的 `run_summary.{json,csv}`、`aggregate_summary.csv`。
 
+受控消融包括：使用 `pickcube_state_delta_h1.yaml` 训练同一 Transformer 的单步预测版本；以及对已训练的 8-step checkpoint 仅改变部署时的 `replan_interval`，无需重训。后者使用 `embodied_policy.sweep_replan`，并输出每个 interval 的均值与样本标准差。
+
 数据来源和预处理过程见 `docs/data_provenance.md`。官方数据及训练输出不会提交到 GitHub。
 
 在支持 Vulkan 渲染的 Linux 机器上录制指定 seed：
