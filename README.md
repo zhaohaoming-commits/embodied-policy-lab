@@ -9,6 +9,8 @@
 
 一个面向具身智能学习的可复现实验仓库：使用 ManiSkill 官方 PickCube 专家轨迹，训练状态条件行为克隆策略，并以闭环 rollout 而非离线 loss 作为主要评价标准。
 
+**项目定位：** 这是从零搭建的第一个具身学习完整项目。目标是建立一个可审计、可复现的仿真控制基线，并理解数据、策略训练和闭环评估如何连成完整链路；它不尝试提出新模型或追逐 SOTA。
+
 **快速入口：** [项目卡片](docs/project_card.md) · [实验日志](docs/experiment_log.md) · [数据来源](docs/data_provenance.md) · [学习笔记](docs/learning_guide.md)
 
 ## Why this repository?
