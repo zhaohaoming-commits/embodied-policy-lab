@@ -1,74 +1,123 @@
 # Embodied Policy Lab
 
-从零实现、训练和评测具身模仿学习策略。第一个里程碑使用一个可控的合成到达任务，验证完整的数据、模型、训练、checkpoint 与闭环 rollout 链路；随后接入 ManiSkill 机器人轨迹。
+> A reproducible closed-loop imitation-learning study for robotic PickCube manipulation in ManiSkill.
 
-## 当前里程碑
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](environment.yml)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.13-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![Simulator](https://img.shields.io/badge/Simulator-ManiSkill%203-5B43E7)](https://maniskill.readthedocs.io/)
+[![Task](https://img.shields.io/badge/Task-PickCube-0F766E)](https://maniskill.readthedocs.io/en/latest/tasks/table_top_gripper/)
 
-- [x] 合成三维到达任务及专家轨迹
-- [x] 历史观测与 action chunk 数据窗口
-- [x] 从零实现 Transformer action chunk policy
-- [x] masked action loss、训练、验证及 checkpoint
-- [x] 闭环 rollout 成功率评测
-- [x] 接入 ManiSkill PickCube 官方演示数据
-- [ ] 图像编码器与本体状态融合
-- [x] Single-step BC 与 action chunking 状态基线对比
-- [ ] 多随机种子及消融实验
+一个面向具身智能学习的可复现实验仓库：使用 ManiSkill 官方 PickCube 专家轨迹，训练状态条件行为克隆策略，并以闭环 rollout 而非离线 loss 作为主要评价标准。
 
-## 本地运行
+**快速入口：** [项目卡片](docs/project_card.md) · [实验日志](docs/experiment_log.md) · [数据来源](docs/data_provenance.md) · [学习笔记](docs/learning_guide.md)
 
-仓库内的 `.venv` 已隔离安装 ManiSkill 3.0.1，并复用现有 Conda 环境的 PyTorch：
+## Why this repository?
 
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe -m embodied_policy.train --config configs/smoke.yaml
-.\.venv\Scripts\python.exe -m embodied_policy.evaluate --config configs/smoke.yaml --checkpoint outputs/smoke/best.pt
+这个项目关注的不是“把 loss 降下来”，而是以下三个具身控制问题：
+
+1. **数据是否可信？** 训练/验证按完整 episode 划分，避免相邻时间窗口泄露。
+2. **策略是否真能控制机器人？** 在固定的 100 个未见初始条件上进行闭环 rollout。
+3. **结论是否稳健？** 固定数据划分和评测任务，使用三个训练随机种子，并报告失败轨迹与负结果。
+
+```mermaid
+flowchart LR
+    A[ManiSkill expert trajectories] --> B[Episode-level train / val split]
+    B --> C[Window dataset<br/>2 observations → 8 actions]
+    C --> D[Action-chunking Transformer]
+    D --> E[Closed-loop PickCube rollout]
+    E --> F[Success rate + telemetry + videos]
 ```
 
-训练产物写入 `outputs/`，该目录不提交 Git。服务器端可用 `environment.yml` 创建独立环境。
+## Main result
 
-当前 PickCube 状态策略：
+在相同的 160/39 episode 训练/验证划分、固定 100 个闭环测试 episode 和三个训练随机种子下：
 
-```powershell
-.\.venv\Scripts\python.exe -m embodied_policy.train --config configs/pickcube_state_delta.yaml
-.\.venv\Scripts\python.exe -m embodied_policy.evaluate --config configs/pickcube_state_delta.yaml --checkpoint outputs/pickcube_state_delta/best.pt
+| Policy | Closed-loop success rate | Mean steps | What it shows |
+|---|---:|---:|---|
+| **Action-chunking Transformer (8 actions)** | **92.7% ± 3.1%** | **24.04 ± 0.22** | 主状态基线 |
+| Single-step MLP (1 action) | 77.3% ± 5.5% | 27.95 ± 1.24 | 低离线 loss 不保证闭环成功 |
+| Transformer, 1-action target | 91.7% ± 2.3% | 25.56 ± 0.58 | 8-step 监督略好，但证据不足以声称显著优势 |
+
+对同一个 8-action Transformer checkpoint，仅改变部署时连续执行的动作数：
+
+| Replan interval | 1 | 2 | 4 | 8 |
+|---|---:|---:|---:|---:|
+| Success rate | **92.7%** | 90.0% | 73.7% | 58.3% |
+
+**Takeaway:** 预测动作块不代表应开环执行动作块；每执行一步就重新观测与规划，远比连续执行 4 或 8 步可靠。完整逐 seed 数据、实验条件和限制见 [实验日志](docs/experiment_log.md)。
+
+## What is implemented
+
+- Episode-level split、历史观测窗口、动作末端 padding mask 与仅训练集统计量归一化；
+- Action-chunking Transformer 与 single-step MLP 基线；
+- 训练、验证、最佳 checkpoint、固定 seed 批量实验与聚合 CSV；
+- PickCube 闭环评估、失败遥测（距离、抓取状态、夹爪命令等）和指定 seed 视频录制；
+- RGB+state、RGB-only、RGB+proprioception 视觉输入消融，以及预训练 ResNet-18 尝试。
+
+## Honest scope and negative result
+
+This is a **simulation** project using **official ManiSkill expert demonstrations**. It is not a physical-robot deployment and not a vision-language-action foundation model.
+
+视觉部分目前没有获得可用的纯视觉策略：RGB-only 与 RGB+proprioception 在三个 seed 上均为 0% 成功率；预训练 ResNet-18 的一次试验仅为 1%，不构成有效改进。RGB + 完整 state 的 95.3% 结果含有物体/目标真值状态，不能用来证明视觉编码器有效。保留这些负结果是为了避免把特权状态带来的效果误写成视觉能力。
+
+## Reproduce
+
+### 1. Environment and tests
+
+```bash
+conda env create -f environment.yml
+conda activate embodied-policy
+python -m unittest discover -s tests -v
 ```
 
-归一化后的 Action-Chunking Transformer 在 100 次闭环评测中成功率为 90%，Linux 4090 服务器复现为 90%。失败 seed 和汇总指标保存在 `outputs/pickcube_state_delta/eval_metrics.json`。这是单训练 seed 基线，不是最终主结果。
+### 2. Train and evaluate the state baseline
 
-固定训练/验证划分和 100 个测试 episode 后的三训练 seed 结果：Action-Chunking Transformer 为 **92.7% ± 3.1%**，Single-step MLP 为 **77.3% ± 5.5%**。这是当前主基线；详细实验条件、逐 seed 数据与限制见 `docs/experiment_log.md`。
+The ManiSkill trajectory file is intentionally not committed. Follow [data provenance](docs/data_provenance.md) to obtain it, then run:
 
-三训练 seed 的正式比较使用批量入口。`split_seed` 与 `eval.seed` 已固定为 7；因此改变 `--train-seeds` 只会改变模型初始化与 DataLoader 顺序，两个模型也会共享数据划分和 100 个测试 episode：
+```bash
+python -m embodied_policy.train --config configs/pickcube_state_delta.yaml
+python -m embodied_policy.evaluate \
+  --config configs/pickcube_state_delta.yaml \
+  --checkpoint outputs/pickcube_state_delta/best.pt
+```
+
+### 3. Reproduce the three-seed comparison
 
 ```bash
 python -m embodied_policy.run_experiments \
   --configs configs/pickcube_state_delta.yaml configs/pickcube_state_mlp.yaml \
   --train-seeds 7 17 27 \
-  --output-root outputs/pickcube_seed_sweep_20260824
+  --output-root outputs/pickcube_seed_sweep
 ```
 
-运行按顺序执行，避免在共享服务器上抢占多张 GPU。输出根目录会保存每次运行的冻结 `config.yaml`、checkpoint、评测 metrics 和汇总的 `run_summary.{json,csv}`、`aggregate_summary.csv`。
+The runner saves a frozen config, checkpoint, rollout metrics and an aggregate CSV for every run. Outputs and source data are excluded from Git by design.
 
-受控消融包括：使用 `pickcube_state_delta_h1.yaml` 训练同一 Transformer 的单步预测版本；以及对已训练的 8-step checkpoint 仅改变部署时的 `replan_interval`，无需重训。后者使用 `embodied_policy.sweep_replan`，并输出每个 interval 的均值与样本标准差。
-
-当前消融结果：1-step 与 8-step Transformer 的成功率接近（91.7% ± 2.3% vs 92.7% ± 3.1%）；但对 8-step 策略，部署时每一步都重新预测效果最佳，`replan_interval=4/8` 会分别降至 73.7% / 58.3%。完整表格见 `docs/experiment_log.md`。
-
-视觉流水线已完成 RGB+state 数据重放、训练和闭环评估，但当前小规模端到端视觉 BC 的 RGB-only 与 RGB+proprioception 均未获得可用成功率；完整 state 中的真值任务几何仍是高分来源。该负结果和预训练 ResNet-18 的停止准则见 `docs/experiment_log.md`。
-
-数据来源和预处理过程见 `docs/data_provenance.md`。官方数据及训练输出不会提交到 GitHub。
-
-在支持 Vulkan 渲染的 Linux 机器上录制指定 seed：
+### Record rollout videos
 
 ```bash
 python -m embodied_policy.record_rollouts \
   --config configs/pickcube_state_delta.yaml \
   --checkpoint outputs/pickcube_state_delta/best.pt \
-  --seeds 30014 30020 30022 \
+  --seeds 30007 30014 30020 \
   --output-dir outputs/videos/transformer
 ```
 
-## 项目原则
+## Repository map
 
-1. 每个模型必须有闭环任务指标，不能只报告训练 loss。
-2. 每项结论至少运行三个随机种子。
-3. 报告失败案例、推理延迟与显存，而不只保存成功视频。
-4. 仿真器、数据集与策略模块解耦，确保基线之间公平比较。
+```text
+configs/                Experiment configurations
+embodied_policy/data/   Episode-aware HDF5 datasets and normalization
+embodied_policy/models/ MLP, action-chunking Transformer and vision policies
+embodied_policy/train.py
+embodied_policy/evaluate.py
+embodied_policy/run_experiments.py
+docs/                   Experiment log, data provenance and learning notes
+tests/                  Unit tests for padding, episode boundaries and evaluation
+```
+
+## Project principles
+
+1. Closed-loop task metrics matter more than training loss alone.
+2. Train/validation splitting happens before temporal windowing.
+3. A claim should include seeds, fixed evaluation conditions and limitations.
+4. Failure cases and negative results are first-class experimental outputs.
